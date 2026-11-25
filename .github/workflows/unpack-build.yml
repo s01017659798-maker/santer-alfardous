@@ -4,8 +4,11 @@ name: Build Santer Alferdous APK
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '.github/workflows/unpack-build.yml'
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -15,29 +18,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract project ZIP
-        run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name '*ملفات-المشروع-مرتبة.zip' -print -quit)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "Project ZIP not found"
-            exit 1
-          fi
-          mkdir extracted
-          unzip -q "$ZIP_FILE" -d extracted
-          cp -a extracted/. .
-          test -d app
-          test -f app/build.gradle
-
-      - name: Set up Java
+      - name: Prepare Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Install Android SDK packages
+        run: |
+          set -e
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Extract project archive
+        run: |
+          set -e
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' -print -quit)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: Project ZIP not found"
+            exit 1
+          fi
+
+          mkdir -p extracted
+          unzip -q "$ZIP_FILE" -d extracted
+
+          APP_GRADLE=$(find extracted -type f -path '*/app/build.gradle' -print -quit)
+          if [ -z "$APP_GRADLE" ]; then
+            echo "ERROR: app/build.gradle not found in archive"
+            exit 1
+          fi
+
+          PROJECT_DIR="${APP_GRADLE%/app/build.gradle}"
+          cp -a "$PROJECT_DIR"/. .
+
+          test -f app/build.gradle
+          test -f settings.gradle -o -f settings.gradle.kts
+          test -f build.gradle -o -f build.gradle.kts
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -45,10 +65,27 @@ jobs:
           gradle-version: '8.9'
 
       - name: Run source tests
-        run: node --test tests/*.test.cjs
+        run: |
+          set -e
+          if [ -d tests ] && ls tests/*.test.cjs >/dev/null 2>&1; then
+            node --test tests/*.test.cjs
+          else
+            echo "ERROR: Source tests not found"
+            exit 1
+          fi
 
-      - name: Build APK
-        run: gradle --no-daemon clean :app:assembleDebug
+      - name: Build Android APK
+        run: |
+          gradle --no-daemon clean :app:assembleDebug
+
+      - name: Verify APK
+        run: |
+          APK=$(find app/build/outputs/apk/debug -type f -name '*.apk' -print -quit)
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not generated"
+            exit 1
+          fi
+          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -56,3 +93,4 @@ jobs:
           name: Santer-Alferdous-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
