@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find and extract project ZIP
+      - name: Extract project ZIP
         run: |
           ZIP_FILE=$(find . -maxdepth 1 -type f -name '*ملفات-المشروع-مرتبة.zip' -print -quit)
           if [ -z "$ZIP_FILE" ]; then
@@ -35,10 +35,9 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-              - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools'
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -57,4 +56,3 @@ jobs:
           name: Santer-Alferdous-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          
