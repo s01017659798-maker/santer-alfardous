@@ -50,7 +50,7 @@ jobs:
           python3 - <<'PY'
           import re, pathlib
           html = pathlib.Path('app/src/main/assets/index.html').read_text()
-          scripts = re.findall(r'<script\\b[^>]*>([\\s\\S]*?)</script>', html, re.I)
+          scripts = re.findall(r'<script\b[^>]*>([\s\S]*?)</script>', html, re.I)
           pathlib.Path('/tmp/inline-js').mkdir(exist_ok=True)
           for i, source in enumerate(scripts):
               pathlib.Path(f'/tmp/inline-js/{i}.js').write_text(source)
